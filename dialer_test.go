@@ -4,13 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io"
 	"net"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/segmentio/kafka-go/sasl/plain"
+	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
 func TestDialer(t *testing.T) {
@@ -25,6 +27,14 @@ func TestDialer(t *testing.T) {
 		{
 			scenario: "log in using SASL PLAIN authentication",
 			function: testDialerSASLPlainAuthentication,
+		},
+		{
+			scenario: "log in using SASL SCRAM 256 authentication",
+			function: testDialerSASLScram256Authentication,
+		},
+		{
+			scenario: "log in using SASL SCRAM 512 authentication",
+			function: testDialerSASLScram512Authentication,
 		},
 	}
 
@@ -79,30 +89,38 @@ func testDialerLookupPartitions(t *testing.T, ctx context.Context, d *Dialer) {
 	}
 }
 
-// PLAINSASLClient is a an SASL PLAIN implementation for testing purposes
-// It does not support saslprep
-type PLAINSASLClient struct {
-	Username string
-	Password string
-}
-
-func (s *PLAINSASLClient) Mechanism() string { return "PLAIN" }
-
-func (s *PLAINSASLClient) Start(ctx context.Context) ([]byte, error) {
-	return []byte(fmt.Sprintf("\x00%s\x00%s", s.Username, s.Password)), nil
-}
-
-func (s *PLAINSASLClient) Next(ctx context.Context, challenge []byte) (bool, []byte, error) {
-	return true, nil, nil
-}
-
+// todo : move out into sasl tests, add negative test
 func testDialerSASLPlainAuthentication(t *testing.T, ctx context.Context, d *Dialer) {
-	var saslDialer = *d
-	saslDialer.SASLClient = func() SASLClient {
-		return &PLAINSASLClient{Username: "adminplain", Password: "admin-secret"}
+	d.SASL = &plain.Mechanism{Username: "adminplain", Password: "admin-secret"}
+	_, err := d.LookupPartitions(ctx, "tcp", "localhost:9094", "non-existing-topic")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *Dialer) {
+	var err error
+	d.SASL, err = scram.Mechanism(scram.SHA256, "adminscram", "admin-secret-256")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	_, err := saslDialer.LookupPartitions(context.Background(), "tcp", "localhost:9094", "non-existing-topic")
+	_, err = d.LookupPartitions(ctx, "tcp", "localhost:9094", "non-existing-topic")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+func testDialerSASLScram512Authentication(t *testing.T, ctx context.Context, d *Dialer) {
+	var err error
+	d.SASL, err = scram.Mechanism(scram.SHA512, "adminscram", "admin-secret-512")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = d.LookupPartitions(ctx, "tcp", "localhost:9094", "non-existing-topic")
 	if err != nil {
 		t.Error(err)
 		return

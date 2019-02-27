@@ -180,6 +180,8 @@ func (e Error) Title() string {
 		return "Unsupported SASL Mechanism"
 	case IllegalSASLState:
 		return "Illegal SASL State"
+	case SASLAuthenticationFailed:
+		return "SASL Authentication Failed"
 	case UnsupportedVersion:
 		return "Unsupported Version"
 	case TopicAlreadyExists:

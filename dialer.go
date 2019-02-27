@@ -3,10 +3,13 @@ package kafka
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/segmentio/kafka-go/sasl"
 )
 
 // The Dialer type mirrors the net.Dialer API but is designed to open kafka
@@ -62,8 +65,9 @@ type Dialer struct {
 	// will be used.
 	TLS *tls.Config
 
+	// todo
 	// SASLClient enables SASL authentication
-	SASLClient func() SASLClient
+	SASL sasl.Mechanism
 }
 
 // Dial connects to the address on the named network.
@@ -104,7 +108,7 @@ func (d *Dialer) DialContext(ctx context.Context, network string, address string
 
 	conn := NewConnWith(c, ConnConfig{ClientID: d.ClientID})
 
-	if d.SASLClient != nil {
+	if d.SASL != nil {
 		if err := d.authenticateSASL(ctx, conn); err != nil {
 			return nil, err
 		}
@@ -144,7 +148,7 @@ func (d *Dialer) DialPartition(ctx context.Context, network string, address stri
 		Partition: partition.ID,
 	})
 
-	if d.SASLClient != nil {
+	if d.SASL != nil {
 		if err := d.authenticateSASL(ctx, conn); err != nil {
 			return nil, err
 		}
@@ -271,25 +275,27 @@ func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 		handshakeVersion = v1
 	}
 
-	client := d.SASLClient()
-	_, err := conn.saslHandshake(handshakeVersion, client.Mechanism())
+	mech, state, err := d.SASL.Start(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = conn.saslHandshake(handshakeVersion, mech)
 	if err != nil {
 		return err // TODO: allow mechanism negotiation by returning the list of supported mechanisms
 	}
 
-	bytes, err := client.Start(ctx)
-	if err != nil {
-		return err
-	}
-
 	var completed bool
 	for !completed {
-		challenge, err := conn.saslAuthenticate(opaque, bytes)
-		if err != nil {
+		challenge, err := conn.saslAuthenticate(opaque, state)
+		switch err {
+		case io.EOF:
+			return SASLAuthenticationFailed
+		case nil:
+		default:
 			return err
 		}
 
-		completed, bytes, err = client.Next(ctx, challenge)
+		completed, state, err = d.SASL.Next(ctx, challenge)
 		if err != nil {
 			return err
 		}
