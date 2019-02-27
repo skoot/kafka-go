@@ -263,21 +263,16 @@ func (d *Dialer) connectTLS(ctx context.Context, conn net.Conn, config *tls.Conf
 }
 
 func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
-	versions, err := conn.apiVersions()
-	if err != nil {
-		return err
-	}
-
-	saslVersion := versions[saslHandshakeRequest]
+	saslVersion := conn.apiVersions[saslHandshakeRequest]
 	var handshakeVersion = v0
 	var opaque = true
-	if saslVersion.maxVersion >= v1 {
+	if saslVersion.MinVersion >= int16(v1) {
 		opaque = false
 		handshakeVersion = v1
 	}
 
 	client := d.SASLClient()
-	_, err = conn.saslHandshake(handshakeVersion, client.Mechanism())
+	_, err := conn.saslHandshake(handshakeVersion, client.Mechanism())
 	if err != nil {
 		return err // TODO: allow mechanism negotiation by returning the list of supported mechanisms
 	}
