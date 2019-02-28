@@ -279,7 +279,7 @@ func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 	if err != nil {
 		return err
 	}
-	_, err = conn.saslHandshake(handshakeVersion, mech)
+	err = conn.saslHandshake(handshakeVersion, mech)
 	if err != nil {
 		return err // TODO: allow mechanism negotiation by returning the list of supported mechanisms
 	}

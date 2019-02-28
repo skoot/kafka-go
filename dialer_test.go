@@ -92,7 +92,7 @@ func testDialerLookupPartitions(t *testing.T, ctx context.Context, d *Dialer) {
 // todo : move out into sasl tests, add negative test
 func testDialerSASLPlainAuthentication(t *testing.T, ctx context.Context, d *Dialer) {
 	d.SASL = &plain.Mechanism{Username: "adminplain", Password: "admin-secret"}
-	_, err := d.LookupPartitions(ctx, "tcp", "localhost:9094", "non-existing-topic")
+	_, err := d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", "non-existing-topic")
 	if err != nil {
 		t.Error(err)
 		return
@@ -106,7 +106,7 @@ func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *
 		t.Fatal(err)
 	}
 
-	_, err = d.LookupPartitions(ctx, "tcp", "localhost:9094", "non-existing-topic")
+	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", "non-existing-topic")
 	if err != nil {
 		t.Error(err)
 		return
@@ -120,7 +120,7 @@ func testDialerSASLScram512Authentication(t *testing.T, ctx context.Context, d *
 		t.Fatal(err)
 	}
 
-	_, err = d.LookupPartitions(ctx, "tcp", "localhost:9094", "non-existing-topic")
+	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", "non-existing-topic")
 	if err != nil {
 		t.Error(err)
 		return

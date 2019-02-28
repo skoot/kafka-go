@@ -1252,13 +1252,13 @@ func (d *connDeadline) unsetConnWriteDeadline() {
 // saslHandshake sends the SASL handshake message
 //
 // See http://kafka.apache.org/protocol.html#The_Messages_SaslHandshake
-func (c *Conn) saslHandshake(version apiVersion, mechanism string) ([]string, error) {
+func (c *Conn) saslHandshake(version apiVersion, mechanism string) error {
 	// The wire format for V0 and V1 is identical, but the version
 	// number will affect how the SASL authentication
-	// challenge/reponses are sent
+	// challenge/responses are sent
 	var resp saslHandshakeResponseV0
 
-	err := c.writeOperation(
+	return c.writeOperation(
 		func(deadline time.Time, id int32) error {
 			return c.writeRequest(saslHandshakeRequest, version, id, &saslHandshakeRequestV0{Mechanism: mechanism})
 		},
@@ -1268,14 +1268,6 @@ func (c *Conn) saslHandshake(version apiVersion, mechanism string) ([]string, er
 			}())
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
-	if resp.ErrorCode != 0 {
-		return resp.EnabledMechanisms, Error(resp.ErrorCode)
-	}
-
-	return resp.EnabledMechanisms, nil
 }
 
 // saslAuthenticate sends the SASL authenticate message
