@@ -103,6 +103,10 @@ func testDialerSASLPlainAuthentication(t *testing.T, ctx context.Context, d *Dia
 }
 
 func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *Dialer) {
+	if !KafkaIsAtLeast("0.10.2") {
+		t.Skip("SASL SCRAM requires kafka 0.10.2+")
+	}
+
 	topic := "sasl-scram256-" + ksuid.New().String()
 	createTopic(t, topic, 1)
 	var err error
@@ -119,6 +123,10 @@ func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *
 }
 
 func testDialerSASLScram512Authentication(t *testing.T, ctx context.Context, d *Dialer) {
+	if !KafkaIsAtLeast("0.10.2") {
+		t.Skip("SASL SCRAM requires kafka 0.10.2+")
+	}
+
 	topic := "sasl-scram512-" + ksuid.New().String()
 	createTopic(t, topic, 1)
 	var err error

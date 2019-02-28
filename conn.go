@@ -1264,7 +1264,11 @@ func (c *Conn) saslHandshake(version apiVersion, mechanism string) error {
 		},
 		func(deadline time.Time, size int) error {
 			return expectZeroSize(func() (remain int, err error) {
-				return (&resp).readFrom(&c.rbuf, size)
+				remain, err = (&resp).readFrom(&c.rbuf, size)
+				if err == nil && resp.ErrorCode != 0 {
+					err = Error(resp.ErrorCode)
+				}
+				return
 			}())
 		},
 	)

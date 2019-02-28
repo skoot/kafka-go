@@ -281,7 +281,7 @@ func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 	}
 	err = conn.saslHandshake(handshakeVersion, mech)
 	if err != nil {
-		return err // TODO: allow mechanism negotiation by returning the list of supported mechanisms
+		return err
 	}
 
 	var completed bool
@@ -392,22 +392,6 @@ type Resolver interface {
 	// LookupHost looks up the given host using the local resolver.
 	// It returns a slice of that host's addresses.
 	LookupHost(ctx context.Context, host string) (addrs []string, err error)
-}
-
-// The SASLClient interface is used to enable plugging in different
-// SASL implementations at compile time.
-type SASLClient interface {
-	// Mechanism returns the name of the mechanism (eg. SCRAM-SHA-256)
-	Mechanism() string
-
-	// Start returns the initial client response to send to the server
-	Start(ctx context.Context) (response []byte, err error)
-
-	// Next computes the response to the server challenge and may be
-	// called multiple times until completed is set.  Completed may be
-	// set either because the authentication exchange has failed or
-	// succeeded.  If the authentication failed, err must be non-nil.
-	Next(ctx context.Context, challenge []byte) (completed bool, response []byte, err error)
 }
 
 func sleep(ctx context.Context, duration time.Duration) bool {
