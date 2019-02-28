@@ -983,12 +983,6 @@ func (c *Conn) writeRequest(apiKey apiKey, apiVersion apiVersion, correlationID 
 	return c.wbuf.Flush()
 }
 
-func (c *Conn) writeRaw(data []byte) error {
-	writeInt32(&c.wbuf, int32(len(data)))
-	c.wbuf.Write(data)
-	return c.wbuf.Flush()
-}
-
 func (c *Conn) readResponse(size int, res interface{}) error {
 	size, err := read(&c.rbuf, size, res)
 	switch err.(type) {
@@ -1252,47 +1246,40 @@ func (d *connDeadline) unsetConnWriteDeadline() {
 // saslHandshake sends the SASL handshake message
 //
 // See http://kafka.apache.org/protocol.html#The_Messages_SaslHandshake
-func (c *Conn) saslHandshake(version apiVersion, mechanism string) error {
+func (c *Conn) saslHandshake(mechanism string) error {
 	// The wire format for V0 and V1 is identical, but the version
 	// number will affect how the SASL authentication
 	// challenge/responses are sent
 	var resp saslHandshakeResponseV0
+	version := v0
+	if c.apiVersions[saslHandshakeRequest].MaxVersion >= 1 {
+		version = v1
+	}
 
-	return c.writeOperation(
+	err := c.writeOperation(
 		func(deadline time.Time, id int32) error {
 			return c.writeRequest(saslHandshakeRequest, version, id, &saslHandshakeRequestV0{Mechanism: mechanism})
 		},
 		func(deadline time.Time, size int) error {
-			return expectZeroSize(func() (remain int, err error) {
-				remain, err = (&resp).readFrom(&c.rbuf, size)
-				if err == nil && resp.ErrorCode != 0 {
-					err = Error(resp.ErrorCode)
-				}
-				return
+			return expectZeroSize(func() (int, error) {
+				return (&resp).readFrom(&c.rbuf, size)
 			}())
 		},
 	)
+	if err == nil && resp.ErrorCode != 0 {
+		err = Error(resp.ErrorCode)
+	}
+	return err
 }
 
 // saslAuthenticate sends the SASL authenticate message
 //
 // See http://kafka.apache.org/protocol.html#The_Messages_SaslAuthenticate
-func (c *Conn) saslAuthenticate(opaque bool, data []byte) ([]byte, error) {
-	if opaque {
-		c.writeRaw(data)
-		var respLen int32
-		_, err := readInt32(&c.rbuf, 4, &respLen)
-		if err != nil {
-			return nil, err
-		}
-
-		resp, _, err := readNewBytes(&c.rbuf, int(respLen), int(respLen))
-		if err != nil {
-			return nil, err
-		}
-
-		return resp, nil
-	} else {
+func (c *Conn) saslAuthenticate(data []byte) ([]byte, error) {
+	// if we sent a v1 handshake, then we must encapsulate the authentication
+	// request in a saslAuthenticateRequest.  otherwise, we read and write raw
+	// bytes.
+	if c.apiVersions[saslHandshakeRequest].MaxVersion >= 1 {
 		var request = saslAuthenticateRequestV0{Data: data}
 		var response saslAuthenticateResponseV0
 
@@ -1306,17 +1293,26 @@ func (c *Conn) saslAuthenticate(opaque bool, data []byte) ([]byte, error) {
 				}())
 			},
 		)
+		if err == nil && response.ErrorCode != 0 {
+			err = Error(response.ErrorCode)
+		}
+		return response.Data, err
+	} else {
+		writeInt32(&c.wbuf, int32(len(data)))
+		if _, err := c.wbuf.Write(data); err != nil {
+			return nil, err
+		}
+		if err := c.wbuf.Flush(); err != nil {
+			return nil, err
+		}
 
+		var respLen int32
+		_, err := readInt32(&c.rbuf, 4, &respLen)
 		if err != nil {
 			return nil, err
 		}
-		if response.ErrorMessage != "" {
-			return nil, fmt.Errorf("SASL error message: %v", response.ErrorMessage)
-		}
-		if response.ErrorCode != 0 {
-			return nil, Error(response.ErrorCode)
-		}
 
-		return response.Data, nil
+		resp, _, err := readNewBytes(&c.rbuf, int(respLen), int(respLen))
+		return resp, err
 	}
 }

@@ -65,8 +65,8 @@ type Dialer struct {
 	// will be used.
 	TLS *tls.Config
 
-	// todo
-	// SASLClient enables SASL authentication
+	// SASL configures the Dialer to use SASL authentication.  If nil, no
+	// authentication will be performed.
 	SASL sasl.Mechanism
 }
 
@@ -101,20 +101,7 @@ func (d *Dialer) DialContext(ctx context.Context, network string, address string
 		defer cancel()
 	}
 
-	c, err := d.dialContext(ctx, network, address)
-	if err != nil {
-		return nil, err
-	}
-
-	conn := NewConnWith(c, ConnConfig{ClientID: d.ClientID})
-
-	if d.SASL != nil {
-		if err := d.authenticateSASL(ctx, conn); err != nil {
-			return nil, err
-		}
-	}
-
-	return conn, nil
+	return d.connect(ctx, network, address, ConnConfig{ClientID: d.ClientID})
 }
 
 // DialLeader opens a connection to the leader of the partition for a given
@@ -137,24 +124,11 @@ func (d *Dialer) DialLeader(ctx context.Context, network string, address string,
 // descriptor. It's strongly advised to use descriptor of the partition that comes out of
 // functions LookupPartition or LookupPartitions.
 func (d *Dialer) DialPartition(ctx context.Context, network string, address string, partition Partition) (*Conn, error) {
-	c, err := d.dialContext(ctx, network, net.JoinHostPort(partition.Leader.Host, strconv.Itoa(partition.Leader.Port)))
-	if err != nil {
-		return nil, err
-	}
-
-	conn := NewConnWith(c, ConnConfig{
+	return d.connect(ctx, network, net.JoinHostPort(partition.Leader.Host, strconv.Itoa(partition.Leader.Port)), ConnConfig{
 		ClientID:  d.ClientID,
 		Topic:     partition.Topic,
 		Partition: partition.ID,
 	})
-
-	if d.SASL != nil {
-		if err := d.authenticateSASL(ctx, conn); err != nil {
-			return nil, err
-		}
-	}
-
-	return conn, nil
 }
 
 // LookupLeader searches for the kafka broker that is the leader of the
@@ -266,31 +240,45 @@ func (d *Dialer) connectTLS(ctx context.Context, conn net.Conn, config *tls.Conf
 	return
 }
 
-func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
-	saslVersion := conn.apiVersions[saslHandshakeRequest]
-	var handshakeVersion = v0
-	var opaque = true
-	if saslVersion.MinVersion >= int16(v1) {
-		opaque = false
-		handshakeVersion = v1
+// todo : doc.
+func (d *Dialer) connect(ctx context.Context, network, address string, connCfg ConnConfig) (*Conn, error) {
+
+	c, err := d.dialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
 	}
 
+	conn := NewConnWith(c, connCfg)
+
+	if d.SASL != nil {
+		if err := d.authenticateSASL(ctx, conn); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+	}
+
+	return conn, nil
+}
+
+func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 	mech, state, err := d.SASL.Start(ctx)
 	if err != nil {
 		return err
 	}
-	err = conn.saslHandshake(handshakeVersion, mech)
+	err = conn.saslHandshake(mech)
 	if err != nil {
 		return err
 	}
 
 	var completed bool
 	for !completed {
-		challenge, err := conn.saslAuthenticate(opaque, state)
+		challenge, err := conn.saslAuthenticate(state)
 		switch err {
-		case io.EOF:
-			return SASLAuthenticationFailed
 		case nil:
+		case io.EOF:
+			// the broker will communicate a failed exchange by closing the
+			// connection.
+			return SASLAuthenticationFailed
 		default:
 			return err
 		}

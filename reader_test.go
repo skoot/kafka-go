@@ -1137,9 +1137,10 @@ func testReaderConsumerGroupReadContentAcrossPartitions(t *testing.T, ctx contex
 
 // Build a struct to implement the ReadPartitions interface.
 type MockConnWatcher struct {
-	count int
+	count      int
 	partitions [][]Partition
 }
+
 func (m *MockConnWatcher) ReadPartitions(topics ...string) (partitions []Partition, err error) {
 	partitions = m.partitions[m.count]
 	// cap the count at len(partitions) -1 so ReadPartitions doesn't even go out of bounds
@@ -1182,11 +1183,10 @@ func testReaderConsumerGroupRebalanceOnPartitionAdd(t *testing.T, ctx context.Co
 	r.config.PartitionWatchInterval = watchTime
 	rg.Go(r.partitionWatcher(conn))
 	rg.Wait()
-	if time.Now().Sub(now).Seconds() > r.config.PartitionWatchInterval.Seconds() * 4 {
+	if time.Now().Sub(now).Seconds() > r.config.PartitionWatchInterval.Seconds()*4 {
 		t.Error("partitionWatcher didn't see update")
 	}
 }
-
 
 func testReaderConsumerGroupRebalance(t *testing.T, ctx context.Context, r *Reader) {
 	r2 := NewReader(r.config)
