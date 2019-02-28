@@ -13,6 +13,7 @@ import (
 
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
+	"github.com/segmentio/ksuid"
 )
 
 func TestDialer(t *testing.T) {
@@ -91,8 +92,10 @@ func testDialerLookupPartitions(t *testing.T, ctx context.Context, d *Dialer) {
 
 // todo : move out into sasl tests, add negative test
 func testDialerSASLPlainAuthentication(t *testing.T, ctx context.Context, d *Dialer) {
+	topic := "sasl-plain-" + ksuid.New().String()
+	createTopic(t, topic, 1)
 	d.SASL = &plain.Mechanism{Username: "adminplain", Password: "admin-secret"}
-	_, err := d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", "non-existing-topic")
+	_, err := d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", topic)
 	if err != nil {
 		t.Error(err)
 		return
@@ -100,13 +103,15 @@ func testDialerSASLPlainAuthentication(t *testing.T, ctx context.Context, d *Dia
 }
 
 func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *Dialer) {
+	topic := "sasl-scram256-" + ksuid.New().String()
+	createTopic(t, topic, 1)
 	var err error
 	d.SASL, err = scram.Mechanism(scram.SHA256, "adminscram", "admin-secret-256")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", "non-existing-topic")
+	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", topic)
 	if err != nil {
 		t.Error(err)
 		return
@@ -114,13 +119,15 @@ func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *
 }
 
 func testDialerSASLScram512Authentication(t *testing.T, ctx context.Context, d *Dialer) {
+	topic := "sasl-scram512-" + ksuid.New().String()
+	createTopic(t, topic, 1)
 	var err error
 	d.SASL, err = scram.Mechanism(scram.SHA512, "adminscram", "admin-secret-512")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", "non-existing-topic")
+	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", topic)
 	if err != nil {
 		t.Error(err)
 		return
