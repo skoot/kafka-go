@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/segmentio/kafka-go/sasl"
 )
 
 // The Dialer type mirrors the net.Dialer API but is designed to open kafka
@@ -65,9 +63,9 @@ type Dialer struct {
 	// will be used.
 	TLS *tls.Config
 
-	// SASL configures the Dialer to use SASL authentication.  If nil, no
-	// authentication will be performed.
-	SASL sasl.Mechanism
+	// SASLMechanism configures the Dialer to use SASL authentication.  If nil,
+	// no authentication will be performed.
+	SASLMechanism SASLMechanism
 }
 
 // Dial connects to the address on the named network.
@@ -251,7 +249,7 @@ func (d *Dialer) connect(ctx context.Context, network, address string, connCfg C
 
 	conn := NewConnWith(c, connCfg)
 
-	if d.SASL != nil {
+	if d.SASLMechanism != nil {
 		if err := d.authenticateSASL(ctx, conn); err != nil {
 			_ = conn.Close()
 			return nil, err
@@ -262,7 +260,7 @@ func (d *Dialer) connect(ctx context.Context, network, address string, connCfg C
 }
 
 func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
-	mech, state, err := d.SASL.Start(ctx)
+	mech, state, err := d.SASLMechanism.Start(ctx)
 	if err != nil {
 		return err
 	}
@@ -286,7 +284,7 @@ func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 			return err
 		}
 
-		completed, state, err = d.SASL.Next(ctx, challenge)
+		completed, state, err = d.SASLMechanism.Next(ctx, challenge)
 		if err != nil {
 			_ = conn.Close()
 			return err

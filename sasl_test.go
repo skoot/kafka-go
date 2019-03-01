@@ -1,12 +1,10 @@
-package sasl_test
+package kafka
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/sasl"
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
@@ -20,20 +18,19 @@ func TestSASL(t *testing.T) {
 
 	t.Parallel()
 
-	// todo : can these be moved to subpackages.
 	tests := []struct {
-		valid    func() sasl.Mechanism
-		invalid  func() sasl.Mechanism
+		valid    func() SASLMechanism
+		invalid  func() SASLMechanism
 		minKafka string
 	}{
 		{
-			valid: func() sasl.Mechanism {
+			valid: func() SASLMechanism {
 				return plain.Mechanism{
 					Username: "adminplain",
 					Password: "admin-secret",
 				}
 			},
-			invalid: func() sasl.Mechanism {
+			invalid: func() SASLMechanism {
 				return plain.Mechanism{
 					Username: "adminplain",
 					Password: "badpassword",
@@ -41,22 +38,22 @@ func TestSASL(t *testing.T) {
 			},
 		},
 		{
-			valid: func() sasl.Mechanism {
+			valid: func() SASLMechanism {
 				mech, _ := scram.Mechanism(scram.SHA256, "adminscram", "admin-secret-256")
 				return mech
 			},
-			invalid: func() sasl.Mechanism {
+			invalid: func() SASLMechanism {
 				mech, _ := scram.Mechanism(scram.SHA256, "adminscram", "badpassword")
 				return mech
 			},
 			minKafka: "0.10.2.0",
 		},
 		{
-			valid: func() sasl.Mechanism {
+			valid: func() SASLMechanism {
 				mech, _ := scram.Mechanism(scram.SHA512, "adminscram", "admin-secret-512")
 				return mech
 			},
-			invalid: func() sasl.Mechanism {
+			invalid: func() SASLMechanism {
 				mech, _ := scram.Mechanism(scram.SHA512, "adminscram", "badpassword")
 				return mech
 			},
@@ -66,7 +63,9 @@ func TestSASL(t *testing.T) {
 
 	for _, tt := range tests {
 		name, _, _ := tt.valid().Start(context.Background())
-		// todo : how to get kafka check.
+		if !KafkaIsAtLeast(tt.minKafka) {
+			t.Skip("requires min kafka version " + tt.minKafka)
+		}
 
 		t.Run(name+" success", func(t *testing.T) {
 			testConnect(t, tt.valid(), true)
@@ -84,12 +83,12 @@ func TestSASL(t *testing.T) {
 	}
 }
 
-func testConnect(t *testing.T, mechanism sasl.Mechanism, success bool) {
+func testConnect(t *testing.T, mechanism SASLMechanism, success bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	d := kafka.Dialer{
-		SASL: mechanism,
+	d := Dialer{
+		SASLMechanism: mechanism,
 	}
 	_, err := d.DialLeader(ctx, "tcp", saslTestConnect, saslTestTopic, 0)
 	if success && err != nil {

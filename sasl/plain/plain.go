@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/VictorDenisov/kafka-go"
+	"github.com/segmentio/kafka-go"
 )
 
-// Mechanism implements PLAIN to pass the credentials in clear text.
+// SASLMechanism implements PLAIN to pass the credentials in clear text.
 type Mechanism struct {
 	Username string
 	Password string
