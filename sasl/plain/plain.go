@@ -3,8 +3,6 @@ package plain
 import (
 	"context"
 	"fmt"
-
-	"github.com/segmentio/kafka-go"
 )
 
 // SASLMechanism implements PLAIN to pass the credentials in clear text.
@@ -18,8 +16,7 @@ func (m Mechanism) Start(ctx context.Context) (string, []byte, error) {
 }
 
 func (m Mechanism) Next(ctx context.Context, challenge []byte) (bool, []byte, error) {
-	if len(challenge) > 0 {
-		return false, nil, kafka.IllegalSASLState
-	}
+	// kafka will return error if it rejected the credentials, so we'd only
+	// arrive here on success.
 	return true, nil, nil
 }
