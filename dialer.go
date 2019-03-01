@@ -240,7 +240,8 @@ func (d *Dialer) connectTLS(ctx context.Context, conn net.Conn, config *tls.Conf
 	return
 }
 
-// todo : doc.
+// connect opens a socket connection to the broker, wraps it to create a
+// kafka connection, and performs SASL authentication if configured to do so.
 func (d *Dialer) connect(ctx context.Context, network, address string, connCfg ConnConfig) (*Conn, error) {
 
 	c, err := d.dialContext(ctx, network, address)
@@ -276,15 +277,18 @@ func (d *Dialer) authenticateSASL(ctx context.Context, conn *Conn) error {
 		switch err {
 		case nil:
 		case io.EOF:
-			// the broker will communicate a failed exchange by closing the
+			_ = conn.Close()
+			// the broker may communicate a failed exchange by closing the
 			// connection.
 			return SASLAuthenticationFailed
 		default:
+			_ = conn.Close()
 			return err
 		}
 
 		completed, state, err = d.SASL.Next(ctx, challenge)
 		if err != nil {
+			_ = conn.Close()
 			return err
 		}
 	}

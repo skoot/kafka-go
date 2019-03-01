@@ -10,10 +10,6 @@ import (
 	"sort"
 	"testing"
 	"time"
-
-	"github.com/segmentio/kafka-go/sasl/plain"
-	"github.com/segmentio/kafka-go/sasl/scram"
-	"github.com/segmentio/ksuid"
 )
 
 func TestDialer(t *testing.T) {
@@ -24,18 +20,6 @@ func TestDialer(t *testing.T) {
 		{
 			scenario: "looking up partitions returns the list of available partitions for a topic",
 			function: testDialerLookupPartitions,
-		},
-		{
-			scenario: "log in using SASL PLAIN authentication",
-			function: testDialerSASLPlainAuthentication,
-		},
-		{
-			scenario: "log in using SASL SCRAM 256 authentication",
-			function: testDialerSASLScram256Authentication,
-		},
-		{
-			scenario: "log in using SASL SCRAM 512 authentication",
-			function: testDialerSASLScram512Authentication,
 		},
 	}
 
@@ -87,58 +71,6 @@ func testDialerLookupPartitions(t *testing.T, ctx context.Context, d *Dialer) {
 	}
 	if !reflect.DeepEqual(partitions, want) {
 		t.Errorf("bad partitions:\ngot:  %+v\nwant: %+v", partitions, want)
-	}
-}
-
-// todo : move out into sasl tests, add negative test
-func testDialerSASLPlainAuthentication(t *testing.T, ctx context.Context, d *Dialer) {
-	topic := "sasl-plain-" + ksuid.New().String()
-	createTopic(t, topic, 1)
-	d.SASL = &plain.Mechanism{Username: "adminplain", Password: "admin-secret"}
-	_, err := d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", topic)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-}
-
-func testDialerSASLScram256Authentication(t *testing.T, ctx context.Context, d *Dialer) {
-	if !KafkaIsAtLeast("0.10.2") {
-		t.Skip("SASL SCRAM requires kafka 0.10.2+")
-	}
-
-	topic := "sasl-scram256-" + ksuid.New().String()
-	createTopic(t, topic, 1)
-	var err error
-	d.SASL, err = scram.Mechanism(scram.SHA256, "adminscram", "admin-secret-256")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", topic)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-}
-
-func testDialerSASLScram512Authentication(t *testing.T, ctx context.Context, d *Dialer) {
-	if !KafkaIsAtLeast("0.10.2") {
-		t.Skip("SASL SCRAM requires kafka 0.10.2+")
-	}
-
-	topic := "sasl-scram512-" + ksuid.New().String()
-	createTopic(t, topic, 1)
-	var err error
-	d.SASL, err = scram.Mechanism(scram.SHA512, "adminscram", "admin-secret-512")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = d.LookupPartitions(ctx, "tcp", "127.0.0.1:9093", topic)
-	if err != nil {
-		t.Error(err)
-		return
 	}
 }
 

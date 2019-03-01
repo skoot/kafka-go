@@ -9,15 +9,17 @@ import (
 	"github.com/xdg/scram"
 )
 
-type Algorithm int
+// HashFunction determines the hash function used by SCRAM to hash the user's
+// credentials.
+type HashFunction int
 
 const (
-	_ Algorithm = iota
+	_ HashFunction = iota
 	SHA256
 	SHA512
 )
 
-func (a Algorithm) String() string {
+func (a HashFunction) name() string {
 	switch a {
 	case SHA256:
 		return "SCRAM-SHA-256"
@@ -27,11 +29,13 @@ func (a Algorithm) String() string {
 	return "unknown"
 }
 
-func (a Algorithm) hashGenerator() scram.HashGeneratorFcn {
+func (a HashFunction) hashGenerator() scram.HashGeneratorFcn {
 	switch a {
 	case SHA256:
 		return scram.SHA256
 	case SHA512:
+		// for whatever reason, the scram package doesn't have a predefined
+		// constant for 512, but we can roll our own.
 		return scram.HashGeneratorFcn(func() hash.Hash {
 			return sha512.New()
 		})
@@ -40,12 +44,15 @@ func (a Algorithm) hashGenerator() scram.HashGeneratorFcn {
 }
 
 type mechanism struct {
-	algo   Algorithm
-	client *scram.ClientConversation
+	hash   HashFunction
+	client *scram.Client
+	convo  *scram.ClientConversation
 }
 
-func Mechanism(algo Algorithm, username, password string) (*mechanism, error) {
-	hashGen := algo.hashGenerator()
+// Mechanism returns a new sasl.Mechanism that will use SCRAM with the provided
+// hash function to securely transmit the provided credentials to Kafka.
+func Mechanism(hash HashFunction, username, password string) (*mechanism, error) {
+	hashGen := hash.hashGenerator()
 	if hashGen == nil {
 		return nil, errors.New("unknown hash algorithm")
 	}
@@ -56,17 +63,18 @@ func Mechanism(algo Algorithm, username, password string) (*mechanism, error) {
 	}
 
 	return &mechanism{
-		algo:   algo,
-		client: client.NewConversation(),
+		hash:   hash,
+		client: client,
 	}, nil
 }
 
 func (m *mechanism) Start(ctx context.Context) (string, []byte, error) {
-	str, err := m.client.Step("")
-	return m.algo.String(), []byte(str), err
+	m.convo = m.client.NewConversation()
+	str, err := m.convo.Step("")
+	return m.hash.name(), []byte(str), err
 }
 
 func (m *mechanism) Next(ctx context.Context, challenge []byte) (bool, []byte, error) {
-	str, err := m.client.Step(string(challenge))
-	return m.client.Done(), []byte(str), err
+	str, err := m.convo.Step(string(challenge))
+	return m.convo.Done(), []byte(str), err
 }
